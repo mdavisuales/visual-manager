@@ -14,18 +14,18 @@ function secret() {
 
 export type Session = { userId: string; role: Role; name: string };
 
-export async function createSession(userId: string) {
+export async function createSession(userId: string, days = 7) {
   const token = await new SignJWT({ userId })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("7d")
+    .setExpirationTime(`${days}d`)
     .sign(secret());
   cookies().set(COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 7,
+    maxAge: 60 * 60 * 24 * days,
   });
 }
 

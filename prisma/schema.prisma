@@ -140,7 +140,7 @@ model Setting {
   value String
 }
 
-// ---------------- Fase 2: equipo, disponibilidad y programación ---------------- 
+/* ---------------- Fase 2: equipo, disponibilidad y programación ---------------- */
 
 enum UnavailabilityKind {
   UNICA
@@ -285,7 +285,7 @@ model AssignmentChange {
   @@index([status])
 }
 
-// ---------------- Fase 3: inventario, préstamos y paquetes técnicos ---------------- 
+/* ---------------- Fase 3: inventario, préstamos y paquetes técnicos ---------------- */
 
 enum ReservationStatus {
   RESERVADO
@@ -451,7 +451,7 @@ model TechIssue {
   @@index([status])
 }
 
-// ---------------- Fase 5: formación, asistencia e informes ---------------- 
+/* ---------------- Fase 5: formación, asistencia e informes ---------------- */
 
 enum AttendanceStatus {
   PRESENTE

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { createSession, destroySession } from "@/lib/auth";
+import { isAppRequest } from "@/lib/appmode";
 
 export type LoginState = { error?: string };
 
@@ -15,7 +16,8 @@ export async function login(_prev: LoginState, fd: FormData): Promise<LoginState
   const user = await prisma.user.findUnique({ where: { email } });
   const ok = await bcrypt.compare(password, user?.passwordHash ?? DUMMY);
   if (!user || !ok || !user.active) return { error: "Correo o contraseña incorrectos." };
-  await createSession(user.id);
+  // En la app Android la sesión dura 30 días para no pedir la contraseña a cada rato
+  await createSession(user.id, isAppRequest() ? 30 : 7);
   redirect("/panel");
 }
 

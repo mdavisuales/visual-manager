@@ -5,6 +5,8 @@ import { getSettings } from "@/lib/settings";
 import { ROLE_LABEL } from "@/lib/constants";
 import { logout } from "@/app/login/actions";
 import NavLink from "@/components/NavLink";
+import AppBottomNav from "@/components/AppBottomNav";
+import { isAppRequest } from "@/lib/appmode";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +23,20 @@ export default async function PanelLayout({ children }: { children: React.ReactN
     prisma.notification.count({ where: { userId: s.userId, readAt: null } }),
     prisma.assignmentChange.count({ where: { targetUserId: s.userId, status: "PENDIENTE" } }),
   ]);
+
+  // En la app Android: encabezado delgado + barra de navegación inferior (el resto está en "Más")
+  if (isAppRequest()) {
+    return (
+      <div className="min-h-screen bg-[#f4f6fb]">
+        <header className="bg-side px-4 py-3 text-white">
+          <p className="font-display text-xl font-extrabold tracking-tight">VISUALES MDA</p>
+          <p className="text-xs font-light text-white/75">{s.name} · {ROLE_LABEL[s.role]}</p>
+        </header>
+        <main className="min-w-0 p-4 pb-28">{children}</main>
+        <AppBottomNav incoming={incoming} unread={unread} />
+      </div>
+    );
+  }
 
   return (
     <div className="bg-[#f4f6fb] md:flex md:min-h-screen">

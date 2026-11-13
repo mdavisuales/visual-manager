@@ -223,6 +223,7 @@ Notas: las cifras de inventario del informe son una foto del momento en que se g
 8. [ ] Compartes el enlace del formulario público con los ministerios.
 9. [ ] (Opcional) Activas el WhatsApp automático y la tarea programada (sección 8).
 10. [ ] Haces tu primer respaldo con `npm run db:export` y lo guardas.
+11. [ ] (Opcional) Generas la app de Android para los servidores (sección 16).
 
 ## 14. Estructura
 
@@ -238,6 +239,10 @@ src/app/api/whatsapp/webhook/  Estados de entrega que envía Meta (firmados)
 src/app/api/cron/         Tarea programada: recordatorios, reintentos, préstamos vencidos
 netlify/functions/cron.mts  Función de Netlify que llama a /api/cron cada hora
 src/lib/scheduling.ts     Reglas de disponibilidad, habilidades y cruces de horario
+android/                  App Android (Kotlin): cascarón de la plataforma con avisos en el celular
+.github/workflows/android.yml  Compila el APK en GitHub
+src/app/api/app/notifications/  Avisos nuevos para la app
+src/components/AppBottomNav.tsx  Barra inferior del modo app
 src/lib/stats.ts          Cálculo de todas las estadísticas de un período
 src/lib/periods.ts        Períodos mensual, trimestral, semestral, anual y personalizado
 src/lib/report-pdf.ts     Informe ministerial en PDF (portada, tablas, gráficos)
@@ -260,7 +265,40 @@ scripts/export.ts         Respaldo en JSON
 - **Aviso automático:** una vez al día, después de las 8 a. m., el coordinador y cada líder reciben un aviso con quién cumple años **hoy** y quién cumple dentro de unos días (por defecto, 3). Nadie recibe aviso de su propio cumpleaños. Se activa, desactiva y ajusta en *Configuración → WhatsApp*. Usa la tarea programada (sección 8.4); llega al panel y a la cola de WhatsApp (o sale solo, si activaste el modo automático).
 - Se incluye en el respaldo (`npm run db:export`).
 
-## 16. Diseño y personalización visual
+## 16. App para Android (servidores)
+
+La app es un **cascarón nativo de Android** que abre la plataforma (la parte posterior al inicio de sesión) dentro de una aplicación instalable. No incluye el formulario público de solicitudes ni la consulta: en la app esas páginas no existen. Los servidores entran con su correo y contraseña y ven sus turnos, confirmaciones, reemplazos e intercambios, disponibilidad, notificaciones, perfil y test, formación, novedades técnicas y cumpleaños. Si un coordinador o líder entra con la app, también ve sus secciones en “Más”.
+
+**Qué hace la app**
+- Barra inferior (Inicio, Turnos, Disponibilidad, Avisos, Más) y menú completo en “Más”.
+- Sesión de **30 días** (en el navegador son 7), botón “atrás”, deslizar para actualizar y pantalla de “sin conexión”.
+- **Avisos en el celular:** cada ~15 minutos la app revisa si hay avisos nuevos (asignaciones, recordatorios, cambios, reemplazos…) y los muestra como notificación. No usa Firebase: **no es instantáneo** (Android permite revisar como mínimo cada 15 minutos y el ahorro de batería puede retrasarlo). Android 13 o superior pide permiso de notificaciones.
+- Los enlaces externos (WhatsApp, Drive, YouTube) se abren en su propia aplicación.
+- Funciona en **Android 8.0 o superior**. No hay versión para iPhone.
+
+**Cómo obtener la app (sin instalar nada en tu computador)**
+1. Despliega esta versión de la plataforma (se sube a GitHub como siempre; **no hay cambios en la base de datos**, no necesitas `db:push`).
+2. En GitHub, en tu repositorio: *Settings → Secrets and variables → Actions → pestaña Variables → New repository variable*. Nombre: `SITE_URL`; valor: la dirección de tu plataforma con `https://`, sin `/` al final (por ejemplo `https://visuales-mda.netlify.app`).
+3. Pestaña **Actions → “Compilar app Android” → Run workflow**. (También se ejecuta sola cuando cambia algo dentro de la carpeta `android/`.) Tarda unos 5 a 10 minutos. Los repositorios privados usan los minutos mensuales de tu plan de GitHub.
+4. Al terminar, entra a la ejecución y descarga el archivo **visuales-mda-app** (viene en un .zip; dentro está el `app-release.apk`).
+5. Envía el `.apk` a los servidores (WhatsApp, Drive…). En el celular: abrirlo e instalarlo; Android pedirá permitir “instalar apps desconocidas” para ese origen. Google Play Protect puede advertir que la app no es conocida: es normal en apps que no vienen de la tienda.
+
+**Actualizar la app.** La app muestra siempre la versión actual de la plataforma: **cuando actualices la web, la app se actualiza sola**. Solo hay que generar un APK nuevo si cambias algo de la propia app (carpeta `android/`) o la dirección del sitio.
+
+**Firma propia (recomendada si piensas actualizar la app).** Por defecto el APK se firma con una llave de pruebas distinta en cada compilación: sirve para instalar, pero un APK nuevo **no se puede instalar encima del anterior** (hay que desinstalar la app y volver a instalarla; solo implica volver a iniciar sesión). Para que se actualice sin problemas, crea una llave **una sola vez** y guárdala:
+
+```bash
+keytool -genkeypair -v -keystore visuales.jks -alias visuales -keyalg RSA -keysize 2048 -validity 10000
+base64 -w0 visuales.jks    # en Windows: certutil -encode visuales.jks visuales.b64
+```
+
+Luego, en *Settings → Secrets and variables → Actions → Secrets*, crea: `KEYSTORE_BASE64` (el texto base64), `KEYSTORE_PASSWORD`, `KEY_ALIAS` (`visuales`) y `KEY_PASSWORD`. **Guarda el archivo `visuales.jks` y sus claves en un lugar seguro: si los pierdes, no podrás actualizar la app instalada.**
+
+**Opcional.** Compilar con Android Studio: abre la carpeta `android/`, agrega la línea `siteUrl=https://tu-sitio.netlify.app` en `android/gradle.properties` y ejecuta *Build → Build APK(s)*. Publicar en Google Play requiere una cuenta de desarrollador (pago único) y un paquete AAB; no está incluido.
+
+**Notas técnicas.** La app se identifica ante la plataforma con el texto `VisualManagerApp` en su *user agent*; con eso la web oculta el formulario público y muestra la barra inferior. Los avisos usan `/api/app/notifications` con la misma sesión. Código en `android/` (Kotlin), flujo de compilación en `.github/workflows/android.yml`.
+
+## 17. Diseño y personalización visual
 
 El diseño sigue el boceto del ministerio: degradado `#031660 → #2848c0 → #6f87e1 → #ffffff`, botones `#1800ad` con letra y contorno blancos, letras del formulario en negro y campos en forma de píldora.
 
