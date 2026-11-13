@@ -1,0 +1,532 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  COORDINADOR
+  LIDER
+  SERVIDOR
+}
+
+enum RequestStatus {
+  PENDIENTE
+  EN_REVISION
+  APROBADA
+  RECHAZADA
+  EJECUTADA
+  CANCELADA
+}
+
+enum LocationType {
+  AUDITORIO_PRINCIPAL
+  AUDITORIO_AUXILIAR
+  SALON_IGLESIA
+  FUERA_IGLESIA
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  passwordHash  String
+  phone         String?
+  address       String?
+  birthMonth    Int?
+  birthDay      Int?
+  joinDate      DateTime       @default(now())
+  experience    String?
+  internalNotes String?
+  role          Role           @default(SERVIDOR)
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  notifications Notification[]
+  areas         Area[]
+  skills        Skill[]
+  testResults   TestResult[]
+  unavailabilities Unavailability[]
+  assignments   Assignment[]
+  changesRequested AssignmentChange[] @relation("ChangeRequester")
+  changesReceived  AssignmentChange[] @relation("ChangeTarget")
+  loansAuthorized  EquipmentLoan[]    @relation("LoanAuthorizer")
+  movements        EquipmentMovement[]
+  issuesReported   TechIssue[]        @relation("IssueReporter")
+  trainingParticipations TrainingParticipation[]
+  reportsCreated   Report[]
+}
+
+// Permisos configurables por rol (el Coordinador siempre tiene todos)
+model RolePermission {
+  id         String @id @default(cuid())
+  role       Role
+  permission String
+
+  @@unique([role, permission], name: "role_permission")
+}
+
+// Opciones de "requerimientos técnicos" del formulario público
+model TechRequirement {
+  id          String           @id @default(cuid())
+  name        String
+  description String?
+  active      Boolean          @default(true)
+  sortOrder   Int              @default(0)
+  requests    ServiceRequest[]
+}
+
+model ServiceRequest {
+  id            String            @id @default(cuid())
+  code          String            @unique
+  activityName  String
+  ministry      String
+  organizerName String
+  whatsapp      String
+  requestDate   DateTime          @default(now())
+  eventDate     DateTime
+  startTime     String
+  endTime       String
+  locationType  LocationType
+  address       String?
+  attendees     Int?
+  observations  String?
+  daysAhead     Int
+  late          Boolean           @default(false)
+  status        RequestStatus     @default(PENDIENTE)
+  internalNote  String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  requirements  TechRequirement[]
+  notifications Notification[]
+  service       Service?
+  picks         EquipmentPick[]
+  reservations  EquipmentReservation[]
+
+  @@index([status])
+  @@index([eventDate])
+}
+
+// Avisos de WhatsApp pendientes de enviar (enlace wa.me con el mensaje listo)
+model Notification {
+  id        String          @id @default(cuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestId String?
+  request   ServiceRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  message   String
+  link      String
+  sent      Boolean         @default(false)
+  sentAt    DateTime?
+  readAt    DateTime?
+  channel       String?   // "api" si salió por la API oficial
+  waMessageId   String?
+  apiStatus     String?   // ACCEPTED, SENT, DELIVERED, READ, FAILED
+  apiError      String?
+  attempts      Int       @default(0)
+  lastAttemptAt DateTime?
+  createdAt DateTime        @default(now())
+
+  @@index([sent])
+  @@index([waMessageId])
+}
+
+model Setting {
+  key   String @id
+  value String
+}
+
+// ---------------- Fase 2: equipo, disponibilidad y programación ---------------- 
+
+enum UnavailabilityKind {
+  UNICA
+  SEMANAL
+}
+
+enum ServiceStatus {
+  PROGRAMADO
+  REALIZADO
+  CANCELADO
+}
+
+enum AssignmentStatus {
+  PENDIENTE
+  CONFIRMADA
+  CANCELADA
+}
+
+enum ChangeType {
+  REEMPLAZO
+  INTERCAMBIO
+  EMERGENCIA
+}
+
+enum ChangeStatus {
+  PENDIENTE
+  ACEPTADO
+  RECHAZADO
+  RETIRADO
+  RESUELTO
+}
+
+// Áreas de servicio (configurables). Oficiales: transmisión, sonido, iluminación y proyección.
+model Area {
+  id          String       @id @default(cuid())
+  name        String
+  active      Boolean      @default(true)
+  sortOrder   Int          @default(0)
+  users       User[]
+  skills      Skill[]
+  assignments Assignment[]
+}
+
+// Habilidades configurables, opcionalmente ligadas a un área
+model Skill {
+  id     String  @id @default(cuid())
+  name   String
+  areaId String?
+  area   Area?   @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  active Boolean @default(true)
+  users  User[]
+}
+
+// Resultado del test de habilidades (orientativo, no excluyente)
+model TestResult {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  data      Json
+  createdAt DateTime @default(now())
+}
+
+// Días y horarios en que un servidor NO puede servir (únicos o recurrentes)
+model Unavailability {
+  id         String             @id @default(cuid())
+  userId     String
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind       UnavailabilityKind
+  date       DateTime?
+  endDate    DateTime?
+  weekday    Int?
+  validFrom  DateTime?
+  validUntil DateTime?
+  allDay     Boolean            @default(true)
+  startTime  String?
+  endTime    String?
+  reason     String?
+  createdAt  DateTime           @default(now())
+}
+
+// Servicio o evento programado (puede venir de una solicitud)
+model Service {
+  id           String         @id @default(cuid())
+  title        String
+  date         DateTime
+  startTime    String
+  endTime      String
+  locationType LocationType
+  address      String?
+  notes        String?
+  status       ServiceStatus  @default(PROGRAMADO)
+  requestId    String?        @unique
+  request      ServiceRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  assignments  Assignment[]
+  picks        EquipmentPick[]
+  reservations EquipmentReservation[]
+
+  @@index([date])
+}
+
+model Assignment {
+  id           String           @id @default(cuid())
+  serviceId    String
+  service      Service          @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User             @relation(fields: [userId], references: [id])
+  areaId       String
+  area         Area             @relation(fields: [areaId], references: [id])
+  functionNote String?
+  status       AssignmentStatus @default(PENDIENTE)
+  confirmedAt  DateTime?
+  reminderAt   DateTime?
+  attendance   AttendanceStatus?
+  createdAt    DateTime         @default(now())
+  changes      AssignmentChange[] @relation("ChangeAssignment")
+  targetOf     AssignmentChange[] @relation("ChangeTargetAssignment")
+
+  @@index([userId])
+  @@index([serviceId])
+}
+
+// Historial de reemplazos, intercambios y reportes de emergencia
+model AssignmentChange {
+  id                 String       @id @default(cuid())
+  type               ChangeType
+  status             ChangeStatus @default(PENDIENTE)
+  assignmentId       String
+  assignment         Assignment   @relation("ChangeAssignment", fields: [assignmentId], references: [id], onDelete: Cascade)
+  targetAssignmentId String?
+  targetAssignment   Assignment?  @relation("ChangeTargetAssignment", fields: [targetAssignmentId], references: [id], onDelete: SetNull)
+  requesterId        String
+  requester          User         @relation("ChangeRequester", fields: [requesterId], references: [id])
+  targetUserId       String?
+  targetUser         User?        @relation("ChangeTarget", fields: [targetUserId], references: [id])
+  reason             String?
+  response           String?
+  createdAt          DateTime     @default(now())
+  resolvedAt         DateTime?
+
+  @@index([status])
+}
+
+// ---------------- Fase 3: inventario, préstamos y paquetes técnicos ---------------- 
+
+enum ReservationStatus {
+  RESERVADO
+  EN_USO
+  DEVUELTO
+  CANCELADO
+}
+
+enum MovementType {
+  REGISTRO
+  EDICION
+  ESTADO
+  PRESTAMO
+  DEVOLUCION
+  RESERVA
+  EN_USO
+  FIN_USO
+  LIBERACION
+}
+
+enum IssueStatus {
+  ABIERTA
+  RESUELTA
+}
+
+model EquipmentCategory {
+  id        String      @id @default(cuid())
+  name      String
+  sortOrder Int         @default(0)
+  equipment Equipment[]
+}
+
+// Un registro puede tener varias unidades (p. ej. 20 cables). Las unidades en mantenimiento o dañadas
+// se llevan en contadores; "prestado" y "en uso" salen de los préstamos y reservas vigentes.
+model Equipment {
+  id             String             @id @default(cuid())
+  name           String
+  categoryId     String?
+  category       EquipmentCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  brand          String?
+  model          String?
+  quantity       Int                @default(1)
+  qtyMaintenance Int                @default(0)
+  qtyDamaged     Int                @default(0)
+  location       String?
+  notes          String?
+  active         Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  loans          EquipmentLoan[]
+  movements      EquipmentMovement[]
+  packageItems   PackageItem[]
+  picks          EquipmentPick[]
+  reservations   EquipmentReservation[]
+  issues         TechIssue[]
+}
+
+model EquipmentLoan {
+  id             String    @id @default(cuid())
+  equipmentId    String
+  equipment      Equipment @relation(fields: [equipmentId], references: [id])
+  quantity       Int       @default(1)
+  receivedBy     String
+  authorizedById String
+  authorizedBy   User      @relation("LoanAuthorizer", fields: [authorizedById], references: [id])
+  loanedAt       DateTime  @default(now())
+  expectedReturn DateTime
+  returnedAt     DateTime?
+  returnNote     String?
+  notes          String?
+
+  @@index([returnedAt])
+}
+
+// Historial de todos los movimientos de un equipo
+model EquipmentMovement {
+  id          String       @id @default(cuid())
+  equipmentId String
+  equipment   Equipment    @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  type        MovementType
+  quantity    Int          @default(0)
+  note        String?
+  damagedDelta     Int     @default(0)
+  maintenanceDelta Int     @default(0)
+  userId      String?
+  user        User?        @relation(fields: [userId], references: [id])
+  createdAt   DateTime     @default(now())
+
+  @@index([equipmentId])
+}
+
+model TechPackage {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  active      Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  items       PackageItem[]
+  picks       EquipmentPick[]
+}
+
+model PackageItem {
+  id          String      @id @default(cuid())
+  packageId   String
+  package     TechPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  equipmentId String
+  equipment   Equipment   @relation(fields: [equipmentId], references: [id])
+  quantity    Int         @default(1)
+
+  @@unique([packageId, equipmentId])
+}
+
+// Lo que se eligió para un evento: un paquete completo o un equipo individual.
+// Pertenece a una solicitud o, si el servicio no viene de una, al servicio.
+model EquipmentPick {
+  id          String          @id @default(cuid())
+  requestId   String?
+  request     ServiceRequest? @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  serviceId   String?
+  service     Service?        @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  packageId   String?
+  package     TechPackage?    @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  equipmentId String?
+  equipment   Equipment?      @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  quantity    Int             @default(1)
+  createdAt   DateTime        @default(now())
+}
+
+// Reserva de unidades para la fecha y el horario de un evento
+model EquipmentReservation {
+  id          String            @id @default(cuid())
+  equipmentId String
+  equipment   Equipment         @relation(fields: [equipmentId], references: [id])
+  quantity    Int
+  requestId   String?
+  request     ServiceRequest?   @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  serviceId   String?
+  service     Service?          @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  date        DateTime
+  startTime   String
+  endTime     String
+  status      ReservationStatus @default(RESERVADO)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([date])
+  @@index([equipmentId])
+}
+
+// Novedades técnicas reportadas por el equipo
+model TechIssue {
+  id          String      @id @default(cuid())
+  equipmentId String?
+  equipment   Equipment?  @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+  description String
+  reporterId  String
+  reporter    User        @relation("IssueReporter", fields: [reporterId], references: [id])
+  status      IssueStatus @default(ABIERTA)
+  response    String?
+  createdAt   DateTime    @default(now())
+  resolvedAt  DateTime?
+
+  @@index([status])
+}
+
+// ---------------- Fase 5: formación, asistencia e informes ---------------- 
+
+enum AttendanceStatus {
+  PRESENTE
+  AUSENTE
+}
+
+enum TrainingStatus {
+  PROGRAMADA
+  REALIZADA
+  CANCELADA
+}
+
+enum ParticipationStatus {
+  INSCRITO
+  ASISTIO
+  AUSENTE
+  COMPLETADO
+}
+
+enum MaterialKind {
+  MANUAL
+  TUTORIAL
+  MATERIAL
+}
+
+model Training {
+  id           String          @id @default(cuid())
+  title        String
+  description  String?
+  date         DateTime?
+  location     String?
+  status       TrainingStatus  @default(PROGRAMADA)
+  createdAt    DateTime        @default(now())
+  materials    TrainingMaterial[]
+  participants TrainingParticipation[]
+}
+
+// Manuales, tutoriales y materiales: se publican como enlaces (Drive, YouTube, etc.). Sin capacitación = biblioteca general.
+model TrainingMaterial {
+  id          String       @id @default(cuid())
+  trainingId  String?
+  training    Training?    @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  title       String
+  kind        MaterialKind @default(MATERIAL)
+  url         String
+  description String?
+  createdAt   DateTime     @default(now())
+}
+
+model TrainingParticipation {
+  id          String              @id @default(cuid())
+  trainingId  String
+  training    Training            @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User                @relation(fields: [userId], references: [id])
+  status      ParticipationStatus @default(INSCRITO)
+  progress    Int                 @default(0)
+  note        String?
+  updatedAt   DateTime            @updatedAt
+
+  @@unique([trainingId, userId])
+}
+
+// Informe ministerial generado: guarda una "foto" de las estadísticas del período
+model Report {
+  id           String   @id @default(cuid())
+  title        String
+  periodType   String
+  startDate    DateTime
+  endDate      DateTime
+  achievements String?
+  needs        String?
+  observations String?
+  data         Json
+  createdById  String
+  createdBy    User     @relation(fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+}
