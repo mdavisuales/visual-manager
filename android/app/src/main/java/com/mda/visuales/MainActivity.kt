@@ -15,12 +15,14 @@ import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.ProgressBar
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import java.io.ByteArrayInputStream
 
 /**
  * Cascarón nativo de la plataforma Visuales MDA: abre la web (ya con sesión iniciada) dentro de la app,
@@ -82,6 +84,14 @@ class MainActivity : Activity() {
                 return true
             }
 
+            // El distintivo "Powered by Netlify" lo agrega Netlify con un script propio: en la app no se carga
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                if (request.url.path?.startsWith("/.netlify/scripts/hud") == true) {
+                    return WebResourceResponse("text/javascript", "utf-8", ByteArrayInputStream(ByteArray(0)))
+                }
+                return null
+            }
+
             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
                 loadFailed = false
                 progress.visibility = View.VISIBLE
@@ -92,6 +102,7 @@ class MainActivity : Activity() {
                 swipe.isRefreshing = false
                 if (!loadFailed) offline.visibility = View.GONE
                 CookieManager.getInstance().flush() // guarda la sesión en el disco
+                view.evaluateJavascript(HIDE_BADGE_JS, null)
             }
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -162,5 +173,14 @@ class MainActivity : Activity() {
 
     companion object {
         const val EXTRA_PATH = "path"
+
+        // Respaldo: si el distintivo llega a aparecer, se oculta y se elimina
+        private const val HIDE_BADGE_JS =
+            "(function(){try{" +
+                "if(!document.getElementById('vm-hide-badge')){var s=document.createElement('style');s.id='vm-hide-badge';" +
+                "s.textContent='#nl-badge-frame,[id^=\\'nl-badge\\']{display:none!important}';document.head.appendChild(s);}" +
+                "var k=function(){var e=document.getElementById('nl-badge-frame');if(e){e.remove();}};k();" +
+                "if(document.body&&!window.__vmBadge){window.__vmBadge=true;new MutationObserver(k).observe(document.body,{childList:true});}" +
+                "}catch(e){}})();"
     }
 }

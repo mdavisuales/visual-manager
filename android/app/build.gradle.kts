@@ -23,7 +23,7 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
-        versionName = "1.0"
+        versionName = "1.1"
         buildConfigField("String", "SITE_URL", "\"$siteUrl\"")
     }
 

@@ -6,6 +6,7 @@ import { ROLE_LABEL } from "@/lib/constants";
 import { logout } from "@/app/login/actions";
 import NavLink from "@/components/NavLink";
 import AppBottomNav from "@/components/AppBottomNav";
+import AppOnlyStyles from "@/components/AppOnlyStyles";
 import { isAppRequest } from "@/lib/appmode";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
   if (isAppRequest()) {
     return (
       <div className="min-h-screen bg-[#f4f6fb]">
+        <AppOnlyStyles />
         <header className="bg-side px-4 py-3 text-white">
           <p className="font-display text-xl font-extrabold tracking-tight">VISUALES MDA</p>
           <p className="text-xs font-light text-white/75">{s.name} · {ROLE_LABEL[s.role]}</p>

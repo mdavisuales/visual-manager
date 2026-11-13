@@ -296,6 +296,8 @@ Luego, en *Settings → Secrets and variables → Actions → Secrets*, crea: `K
 
 **Opcional.** Compilar con Android Studio: abre la carpeta `android/`, agrega la línea `siteUrl=https://tu-sitio.netlify.app` en `android/gradle.properties` y ejecuta *Build → Build APK(s)*. Publicar en Google Play requiere una cuenta de desarrollador (pago único) y un paquete AAB; no está incluido.
 
+**El distintivo “Powered by Netlify”.** Netlify lo agrega a los sitios nuevos del plan gratuito (a veces tapa la barra inferior de la app). La plataforma lo oculta **solo cuando se entra desde la app**; en el navegador se deja tal cual. Si prefieres quitarlo para todos, Netlify indica que se activa o desactiva en *Project configuration → General → Powered by Netlify badge* (según tu plan, la opción puede no estar disponible).
+
 **Notas técnicas.** La app se identifica ante la plataforma con el texto `VisualManagerApp` en su *user agent*; con eso la web oculta el formulario público y muestra la barra inferior. Los avisos usan `/api/app/notifications` con la misma sesión. Código en `android/` (Kotlin), flujo de compilación en `.github/workflows/android.yml`.
 
 ## 17. Diseño y personalización visual
