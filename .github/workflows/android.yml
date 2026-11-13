@@ -5,8 +5,9 @@ on:
   workflow_dispatch:
     inputs:
       site_url:
-        description: "Dirección de la plataforma (https://...). Si se deja vacía se usa la variable SITE_URL del repositorio."
+        description: "Dirección de la plataforma (https://...). Si se deja vacía se usa la variable SITE_URL."
         required: false
+        type: string
 
   push:
     paths:
@@ -16,20 +17,24 @@ on:
 jobs:
   apk:
     runs-on: ubuntu-latest
+    environment: SITE_URL
 
     env:
       SITE_URL: ${{ inputs.site_url || vars.SITE_URL }}
       KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
 
-      - name: Verificar la dirección de la plataforma
+      - name: Verificar dirección de la plataforma
         run: |
           if [ -z "$SITE_URL" ]; then
-            echo "::error::Falta la dirección de la plataforma. Crea la variable SITE_URL en Settings > Secrets and variables > Actions > Variables, o escríbela al ejecutar el flujo."
+            echo "::error::Falta SITE_URL. Configúrala en el Environment SITE_URL o introdúcela al ejecutar el workflow."
             exit 1
           fi
+
+          echo "Dirección de la plataforma configurada correctamente."
 
       - name: Configurar Java
         uses: actions/setup-java@v4
@@ -58,7 +63,11 @@ jobs:
 
       - name: Compilar el APK
         working-directory: android
-        run: gradle :app:assembleRelease -PsiteUrl="$SITE_URL" -PversionCode="${{ github.run_number }}" --no-daemon
+        run: |
+          gradle :app:assembleRelease \
+            -PsiteUrl="$SITE_URL" \
+            -PversionCode="${{ github.run_number }}" \
+            --no-daemon
 
       - name: Guardar el APK
         uses: actions/upload-artifact@v4
